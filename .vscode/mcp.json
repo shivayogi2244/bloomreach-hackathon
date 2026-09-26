@@ -1,0 +1,7 @@
+{
+  "servers": {
+    "loomi-connect": {
+      "url": "https://brx.connect.loomi.ai/mcp"
+    }
+  }
+}

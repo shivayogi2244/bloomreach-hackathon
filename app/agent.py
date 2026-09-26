@@ -8,6 +8,7 @@ from google.genai import types
 
 from . import bloomreach_tool, databricks_tool, profile_tool, shopify_tool
 from .config import GEMINI_API_KEY, GEMINI_MODEL
+from . import mcp_bridge
 from .tools import ALL_TOOLS
 
 SYSTEM_PROMPT = """You are the Loop Copilot for an e-commerce brand. You operate the full loop:
@@ -30,6 +31,10 @@ Operating rules:
 7. Signals can disagree (churned by recency but still clicking emails). Surface the
    conflict explicitly and let it change the treatment — attention is cheaper than
    discounts.
+8. Tools prefixed loomi_* come from Bloomreach's Loomi Connect MCP server — they cover
+   far more than the basic REST layer: segments, analytics, predictions, scenarios,
+   campaign management. Prefer them for any Bloomreach question beyond sending a basic
+   campaign. They call the real workspace; never invent their outputs.
 """
 
 _client: genai.Client | None = None
@@ -59,6 +64,9 @@ def _dispatch_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
             return bloomreach_tool.trigger_campaign(**args)
         if name == "resolve_customer":
             return profile_tool.resolve_customer(**args)
+        if name.startswith("loomi_"):
+            # Generic Loomi Connect MCP passthrough (T6): any Bloomreach tool
+            return mcp_bridge.call_tool(name[len("loomi_"):], args)
         return {"error": f"unknown tool: {name}"}
     except Exception as exc:  # surface tool failures to the model, don't crash
         return {"error": str(exc)}
@@ -76,7 +84,18 @@ def run_agent(history: list[dict[str, str]]) -> dict[str, Any]:
         role = "model" if msg["role"] == "model" else "user"
         contents.append(types.Content(role=role, parts=[types.Part(text=msg["text"])]))
 
+    # T6: augment the fixed tool set with the live Loomi Connect MCP surface.
+    # MCP problems must NEVER take down the chat — degrade to built-in tools.
+    declarations = list(ALL_TOOLS)
     tool_events: list[dict[str, Any]] = []
+    if mcp_bridge.mcp_available():
+        try:
+            declarations = declarations + mcp_bridge.list_tools()
+            tool_events.append({"tool": "loomi_mcp_connect", "args": {},
+                                "result": {"status": "connected", "tools": len(declarations) - len(ALL_TOOLS)}})
+        except Exception as exc:
+            tool_events.append({"tool": "loomi_mcp_connect", "args": {},
+                                "result": {"error": f"MCP unavailable, using built-ins: {str(exc)[:200]}"}})
 
     for _ in range(8):  # hard cap on tool-call rounds
         response = client.models.generate_content(
@@ -84,7 +103,7 @@ def run_agent(history: list[dict[str, str]]) -> dict[str, Any]:
             contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
-                tools=[types.Tool(function_declarations=ALL_TOOLS)],
+                tools=[types.Tool(function_declarations=declarations)],
                 temperature=0.3,
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
             ),

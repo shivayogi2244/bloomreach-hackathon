@@ -3,3 +3,5 @@ fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 httpx>=0.27.0
 python-dotenv>=1.0.1
+# Loomi Connect MCP — Loomi docs require this exact pin (SDK 2.x not certified)
+mcp>=1.9,<2

@@ -1,12 +1,17 @@
-# The Loop — Commerce Copilot (1-day, end-to-end)
+# The Loop — Commerce Copilot (Track T6: all four platforms, one agent)
+
+> **Track T6 — Composable commerce orchestration:** close the full loop. All four
+> platforms. One agent. Gemini orchestrates; Databricks supplies intelligence; Shopify
+> supplies commerce actions; **Bloomreach connects through the Loomi Connect MCP server**
+> (`brx.connect.loomi.ai/mcp`, 160+ tools) with your existing REST fallback; Google Cloud
+> Run is the deployment surface.
 
 > **The thesis, answered:** four platforms generate signals about the same customer from
-> different vantage points — Databricks (intelligence), Shopify (commerce), Bloomreach
-> (engagement/activation), on Google Cloud infrastructure. The missing piece is the agentic
-> layer that connects them. **This project is that layer.** Ask "who is ava@example.com and
-> what should we do for her?" and the agent stitches all three vantage points into one
-> profile, surfaces where they *disagree* (churned by recency, but still clicking emails →
-> nudge, don't discount), and executes the treatment.
+> different vantage points. The missing piece is the agentic layer that connects them.
+> **This project is that layer.** Ask "who is ava@example.com and what should we do for
+> her?" and the agent stitches all vantage points into one profile, surfaces where they
+> *disagree* (churned by recency, but still clicking emails → nudge, don't discount),
+> and executes the treatment.
 
 A chat agent that runs the full loop:
 
@@ -104,10 +109,28 @@ app/
   shopify_tool.py    orders / products / discounts   (mock + live)
   databricks_tool.py SQL over segments               (mock + live)
   bloomreach_tool.py campaign trigger + engagement   (mock + live)
+  mcp_bridge.py      Loomi Connect MCP: 160+ Bloomreach tools (T6)
   config.py, state.py, mock_data.py, mock_signals.py
 sql/setup.sql        Databricks tables + seed data
 Dockerfile           Cloud Run deploy
 ```
+
+## 🔌 Loomi Connect MCP (the T6 differentiator)
+
+Instead of only two hand-written Bloomreach REST functions, the agent dynamically gains
+Bloomreach's full MCP surface — campaigns, segments, analytics, predictions, scenarios:
+
+1. `pip install -r requirements.txt` (pins `mcp>=1.9,<2` per Loomi docs — SDK 2.x is
+   not certified and breaks `streamablehttp_client`)
+2. `python -m tests.mcp_check` — **run interactively once**: a browser opens for
+   Bloomreach SSO; the session then persists ~30 days. No API keys.
+3. `.env`: `MCP_ENABLED=true` (+ `LOOMI_MCP_URL` if not the demo server)
+4. Restart the server. The agent now sees `loomi_*` tools alongside the built-ins and
+   can mix them freely (e.g. Databricks segment → MCP analytics → MCP campaign draft).
+
+Notes: MCP campaign sends are always **drafts** (by design); the REST `trigger_campaign`
+remains the live-send path. Auth uses browser SSO, so run the check once on the demo
+machine beforehand.
 
 ## 🧭 The judge-facing story
 
