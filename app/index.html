@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The Loop — Commerce Copilot</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #161b22; --border: #2a3038;
+    --text: #e6e9ef; --muted: #9aa4b2; --accent: #fbbc04; --err: #f28b82;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text); height: 100vh;
+    display: flex; flex-direction: column;
+  }
+  header {
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .logo {
+    width: 34px; height: 34px; border-radius: 50%; background: #111;
+    border: 2px solid var(--accent); display: grid; place-items: center; font-size: 16px;
+  }
+  header h1 { font-size: 16px; margin: 0; }
+  header span { color: var(--muted); font-size: 12px; }
+  #layout { flex: 1; display: flex; min-height: 0; }
+  #chatcol { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 760px; line-height: 1.55; white-space: pre-wrap; }
+  .msg.user { align-self: flex-end; background: #1d2b45; padding: 10px 14px; border-radius: 14px 14px 2px 14px; }
+  .msg.model { align-self: flex-start; }
+  .receipts { align-self: flex-start; max-width: 760px; display: flex; flex-direction: column; gap: 6px; }
+  .receipt {
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 10px; color: var(--muted);
+  }
+  .receipt b { color: var(--accent); font-weight: 600; }
+  .err { color: var(--err); }
+  form { display: flex; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--border); }
+  input {
+    flex: 1; background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    border-radius: 10px; padding: 12px 14px; font-size: 14px; outline: none;
+  }
+  input:focus { border-color: var(--accent); }
+  button#send {
+    background: var(--accent); color: #111; border: 0; border-radius: 10px;
+    padding: 12px 22px; font-weight: 700; cursor: pointer;
+  }
+  button#send:disabled { opacity: 0.5; cursor: wait; }
+  .chips { display: flex; gap: 8px; padding: 0 20px 12px; flex-wrap: wrap; }
+  .chip {
+    font-size: 12px; color: var(--muted); border: 1px solid var(--border);
+    border-radius: 999px; padding: 6px 12px; cursor: pointer; background: transparent;
+  }
+  .chip:hover { color: var(--text); border-color: var(--accent); }
+  .typing { color: var(--muted); font-size: 13px; }
+
+  /* ---- unified profile panel ---- */
+  #profile {
+    width: 320px; border-left: 1px solid var(--border); background: var(--panel);
+    padding: 18px; overflow-y: auto; display: none;
+  }
+  #profile.open { display: block; }
+  #profile h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 4px; }
+  #profile .pname { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
+  #profile .pemail { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+  .vantage { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+  .vantage h3 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    margin: 0 0 6px; color: var(--accent);
+  }
+  .vantage dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 12px; }
+  .vantage dt { color: var(--muted); }
+  .vantage dd { margin: 0; text-align: right; }
+  #rec {
+    border: 1px solid var(--accent); border-radius: 10px; padding: 12px; margin-top: 14px;
+  }
+  #rec .action { font-weight: 700; color: var(--accent); }
+  #rec .why { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+  #rec button {
+    margin-top: 10px; width: 100%; background: var(--accent); color: #111; border: 0;
+    border-radius: 8px; padding: 9px; font-weight: 700; cursor: pointer; font-size: 13px;
+  }
+  #rec button:disabled { opacity: 0.5; cursor: wait; }
+  #profile .close {
+    float: right; background: none; border: 0; color: var(--muted); font-size: 18px;
+    cursor: pointer; line-height: 1;
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">🔁</div>
+  <div>
+    <h1>The Loop — Commerce Copilot</h1>
+    <span>one customer · Databricks + Shopify + Bloomreach vantage points · Gemini agent</span>
+  </div>
+</header>
+
+<div id="layout">
+  <div id="chatcol">
+    <div id="chat"></div>
+
+    <div class="chips">
+      <button class="chip" data-q="Show me my VIP customers">VIP customers</button>
+      <button class="chip" data-q="Win back churn-risk customers with a 15% discount and email them">Win back churn risk</button>
+      <button class="chip" data-q="Who is ava@example.com and what should we do for her?">Resolve Ava</button>
+      <button class="chip" data-q="What products do we sell and at what prices?">Catalog</button>
+    </div>
+
+    <form id="form">
+      <input id="input" autocomplete="off" placeholder="e.g. Who is ava@example.com and what should we do for her?" />
+      <button id="send">Send</button>
+    </form>
+  </div>
+
+  <aside id="profile">
+    <button class="close" id="profileClose" title="Close">×</button>
+    <h2>Unified profile</h2>
+    <div class="pname" id="pName"></div>
+    <div class="pemail" id="pEmail"></div>
+    <div class="vantage"><h3>Databricks — intelligence</h3><dl id="pDbx"></dl></div>
+    <div class="vantage"><h3>Shopify — commerce</h3><dl id="pShop"></dl></div>
+    <div class="vantage"><h3>Bloomreach — engagement</h3><dl id="pBr"></dl></div>
+    <div id="rec">
+      <div class="action" id="pAction"></div>
+      <div class="why" id="pWhy"></div>
+      <button id="actBtn">Act on this via chat →</button>
+    </div>
+  </aside>
+</div>
+
+<script>
+const chat = document.getElementById("chat");
+const form = document.getElementById("form");
+const input = document.getElementById("input");
+const send = document.getElementById("send");
+const sessionId = crypto.randomUUID();
+
+function addMsg(role, text) {
+  const div = document.createElement("div");
+  div.className = "msg " + role;
+  div.textContent = text;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+function addReceipt(ev) {
+  const div = document.createElement("div");
+  div.className = "receipt";
+  const mode = ev.result && ev.result.mode ? ev.result.mode : "?";
+  const lines = [];
+  if (ev.result && ev.result.rows) {
+    lines.push(`databricks[${mode}] → ${ev.result.rows.length} customers`);
+  } else if (ev.result && ev.result.orders) {
+    lines.push(`shopify[${mode}] → ${ev.result.orders.length} orders`);
+  } else if (ev.result && ev.result.products) {
+    lines.push(`shopify[${mode}] → ${ev.result.products.length} products`);
+  } else if (ev.result && ev.result.code) {
+    lines.push(`shopify[${mode}] → discount ${ev.result.code} (${ev.result.percent}%)`);
+  } else if (ev.result && ev.result.campaign_run_id !== undefined) {
+    lines.push(`bloomreach[${mode}] → campaign #${ev.result.campaign_run_id} to ${ev.result.recipients.length} customers`);
+  } else if (ev.result && ev.result.vantage_points) {
+    const r = ev.result.recommendation || {};
+    lines.push(`unified → ${r.action || "?"}: ${r.why || ""}`);
+  } else if (ev.result && ev.result.error) {
+    lines.push("error: " + ev.result.error);
+  } else {
+    lines.push("ok");
+  }
+  if (ev.result && ev.result.error) div.classList.add("err");
+  div.innerHTML = "<b>" + ev.tool + "</b> " + lines.join(" · ");
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+async function ask(q) {
+  addMsg("user", q);
+  const typing = addMsg("model", "…");
+  typing.className = "msg model typing";
+  send.disabled = true;
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, message: q }),
+    });
+    if (!res.ok) {
+      let msg = "HTTP " + res.status;
+      try { const e = await res.json(); if (e.detail) msg = e.detail; } catch {}
+      throw new Error(msg);
+    }
+    const data = await res.json();
+    typing.remove();
+    (data.tool_events || []).forEach(addReceipt);
+    addMsg("model", data.reply);
+  } catch (err) {
+    typing.remove();
+    addMsg("model", "⚠️ " + err.message + " — is GEMINI_API_KEY set and the server running?");
+  } finally {
+    send.disabled = false;
+    input.focus();
+  }
+}
+
+form.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = "";
+  ask(q);
+});
+
+document.querySelectorAll(".chip").forEach((chip) =>
+  chip.addEventListener("click", () => ask(chip.dataset.q))
+);
+
+/* ---- unified profile panel ---- */
+const panel = document.getElementById("profile");
+const actBtn = document.getElementById("actBtn");
+let profileEmail = null;
+
+function row(dl, entries) {
+  dl.innerHTML = "";
+  for (const [k, v] of entries) {
+    const dt = document.createElement("dt");
+    const dd = document.createElement("dd");
+    dt.textContent = k;
+    dd.textContent = v === null || v === undefined || v === "" ? "—" : String(v);
+    dl.appendChild(dt); dl.appendChild(dd);
+  }
+}
+
+async function openProfile(email) {
+  panel.classList.add("open");
+  document.getElementById("pName").textContent = "…";
+  document.getElementById("pEmail").textContent = email;
+  document.getElementById("pDbx").innerHTML = "";
+  document.getElementById("pShop").innerHTML = "";
+  document.getElementById("pBr").innerHTML = "";
+  document.getElementById("pAction").textContent = "";
+  document.getElementById("pWhy").textContent = "";
+  profileEmail = email;
+  try {
+    const res = await fetch("/api/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const p = await res.json();
+    if (p.error) {
+      document.getElementById("pName").textContent = "Not found";
+      return;
+    }
+    document.getElementById("pName").textContent =
+      [p.identity.first_name, p.identity.last_name].filter(Boolean).join(" ") || email;
+    const dbx = p.vantage_points.databricks;
+    row(document.getElementById("pDbx"), [
+      ["segment", dbx.segment], ["total spent", "$" + Number(dbx.total_spent || 0).toFixed(2)],
+      ["orders", dbx.order_count], ["last order", dbx.last_order_at],
+    ]);
+    const shop = p.vantage_points.shopify;
+    row(document.getElementById("pShop"), [
+      ["orders", shop.orders.length],
+      ["latest", shop.orders[0] ? shop.orders[0].created_at : "—"],
+      ["latest total", shop.orders[0] ? "$" + shop.orders[0].total : "—"],
+      ["open cart", shop.open_cart.length ? shop.open_cart.map(i => i.title).join(", ") : "—"],
+    ]);
+    const br = p.vantage_points.bloomreach.signals;
+    row(document.getElementById("pBr"), [
+      ["email opens", br.email_opens], ["email clicks", br.email_clicks],
+      ["page views", br.page_views], ["last signal", br.last_event || "—"],
+    ]);
+    document.getElementById("pAction").textContent = p.recommendation.action;
+    document.getElementById("pWhy").textContent = p.recommendation.why + " · via " + p.recommendation.channel;
+  } catch (err) {
+    document.getElementById("pName").textContent = "Failed to load profile";
+  }
+}
+
+actBtn.addEventListener("click", () => {
+  if (!profileEmail) return;
+  const action = document.getElementById("pAction").textContent;
+  panel.classList.remove("open");
+  ask(`For ${profileEmail}, the recommendation is "${action}" — execute it.`);
+});
+
+// Open the panel when the agent resolves a customer, or when chat mentions an email
+const EMAIL_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
+const origAddMsg = addMsg;
+addMsg = function (role, text) {
+  const div = origAddMsg(role, text);
+  const m = typeof text === "string" ? text.match(EMAIL_RE) : null;
+  if (m) openProfile(m[0]);
+  return div;
+};
+</script>
+</body>
+</html>

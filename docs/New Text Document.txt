@@ -1,0 +1,20 @@
+Google Cloud Console URL (Open in chrome incognito mode)
+
+https://console.cloud.google.com/home/dashboard?project=qwiklabs-gcp-03-c4071c17ea42
+
+username: student-01-32fd7c8596fa@qwiklabs.net
+pwd: 0R08ahW0v7Jo
+projId: qwiklabs-gcp-03-c4071c17ea42
+DefRegion: us-east1 (us-east1-b)
+
+
+
+aistudio.google.com/api-keys
+
+username: student-01-32fd7c8596fa@qwiklabs.net
+apikey: AIzaSyDh4Gzct_i7iFZP5ZEnjAAl-u2TOI1CLNc
+
+
+
+
+

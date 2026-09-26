@@ -1,0 +1,126 @@
+# The Loop — Commerce Copilot (1-day, end-to-end)
+
+> **The thesis, answered:** four platforms generate signals about the same customer from
+> different vantage points — Databricks (intelligence), Shopify (commerce), Bloomreach
+> (engagement/activation), on Google Cloud infrastructure. The missing piece is the agentic
+> layer that connects them. **This project is that layer.** Ask "who is ava@example.com and
+> what should we do for her?" and the agent stitches all three vantage points into one
+> profile, surfaces where they *disagree* (churned by recency, but still clicking emails →
+> nudge, don't discount), and executes the treatment.
+
+A chat agent that runs the full loop:
+
+```
+        ┌──────────────────────────────────────────────┐
+        │            🤖 GEMINI AGENT (the Loop)        │
+        │        function-calling · plans & acts       │
+        └───────┬───────────────┬──────────────┬───────┘
+                │               │              │
+        ┌───────▼──────┐ ┌──────▼───────┐ ┌────▼─────────┐
+        │  Databricks  │ │    Shopify   │ │  Bloomreach  │
+        │ intelligence │ │   commerce   │ │  activation  │
+        │  (segments,  │ │ (orders,     │ │ (campaigns,  │
+        │   RFM, SQL)  │ │  discounts)  │ │  email send) │
+        └──────────────┘ └──────────────┘ └──────────────┘
+                  hosted on Google Cloud (Cloud Run)
+```
+
+**What it does (one sentence):** you type *"win back customers who haven't ordered in 90 days"*, the agent queries Databricks for that segment, checks their Shopify order history, creates a discount code, launches the Bloomreach email campaign, and reports back with proof.
+
+This maps to **T5 (Behavioral signal and intervention agents)** in the reference tracks, and is the baseline for **T6 (all four platforms, one agent)**.
+
+---
+
+## ✅ Run in 10 minutes (MOCK MODE — no accounts needed)
+
+```bash
+# 1. Get a Gemini API key: https://aistudio.google.com/api-keys
+export GEMINI_API_KEY="your-key-here"      # Windows: setx GEMINI_API_KEY "your-key"
+
+# 2. Install & run
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+
+# 3. Open http://127.0.0.1:8000
+```
+
+Databricks / Shopify / Bloomreach all default to **mock mode** (`USE_MOCKS=true` in `.env`),
+so the full loop works today. Flip each one to live as you get credentials.
+
+---
+
+## 🔌 Going live, platform by platform
+
+### 1. Google Cloud / Gemini (agent brain)
+- Option A (fast): AI Studio key → https://aistudio.google.com/api-keys
+- Option B (enterprise): Vertex AI → `gcloud services enable aiplatform.googleapis.com`
+- Deploy: `gcloud run deploy --source .` (Dockerfile included, region `us-central1`)
+
+### 2. Databricks (intelligence)
+1. Create a **SQL Warehouse** (Serverless works) → note its **Warehouse ID**.
+2. Settings → **Access tokens** → generate a PAT.
+3. Run `sql/setup.sql` in a notebook / SQL editor to create + seed tables.
+4. Env: `DATABRICKS_HOST`, `DATABRICKS_TOKEN`, `DATABRICKS_WAREHOUSE_ID`.
+
+### 3. Shopify (commerce)
+1. Shopify Admin → **Settings → Apps → Develop apps** → create app.
+2. Scopes needed: `read_orders, read_products, write_discounts`.
+3. Install → copy the **Admin API access token** (shown once).
+4. Env: `SHOPIFY_SHOP` (yourshop.myshopify.com), `SHOPIFY_TOKEN`.
+
+### 4. Bloomreach (activation)
+1. In Engagement → **Campaigns**, create an email campaign with a *trigger* node.
+2. Copy the campaign ID; create an **API token** (Settings → Access management).
+3. Env: `BLOOMREACH_PROJECT_ID`, `BLOOMREACH_API_KEY`, `BLOOMREACH_CAMPAIGN_ID`.
+   (Endpoint shape in `app/bloomreach_tool.py` — verify against your project's Campaign API doc.)
+
+Then set `USE_MOCKS=false` (or per-service: `SHOPIFY_MOCK=false`, etc.).
+
+---
+
+## 📅 The 1-day plan
+
+| Time | Task | Done when |
+|------|------|-----------|
+| 09:00–10:00 | Gemini key, `pip install`, run mock loop | chat replies, tools fire |
+| 10:00–12:00 | Databricks: run `sql/setup.sql`, wire live query | real segments in chat |
+| 13:00–15:00 | Shopify dev app, wire orders + discount | agent creates real code |
+| 15:00–17:00 | Bloomreach campaign + trigger | email arrives in inbox |
+| 17:00–18:00 | Deploy to Cloud Run, record demo | public URL + 2-min Loom |
+
+## 🎬 2-minute demo script
+1. *"Show me VIP customers."* → Databricks rows appear.
+2. *"Create a 15% discount for anyone churn-risk and email them."* → agent: query → discount → campaign.
+3. Show the email in your inbox + the discount code working in Shopify.
+4. *"What did you just do?"* → the agent summarizes the loop with tool receipts.
+
+## 🧱 Repo map
+```
+app/
+  main.py            FastAPI server + chat UI + /api/profile
+  agent.py           Gemini function-calling loop (THE LOOP)
+  tools.py           tool declarations the agent can call
+  profile_tool.py    UNIFIED PROFILE: stitches the 3 vantage points
+  shopify_tool.py    orders / products / discounts   (mock + live)
+  databricks_tool.py SQL over segments               (mock + live)
+  bloomreach_tool.py campaign trigger + engagement   (mock + live)
+  config.py, state.py, mock_data.py, mock_signals.py
+sql/setup.sql        Databricks tables + seed data
+Dockerfile           Cloud Run deploy
+```
+
+## 🧭 The judge-facing story
+
+1. **One customer, three vantage points.** `resolve_customer` shows the same email as
+   Databricks sees it (spend, segment), as Shopify sees it (orders, open cart), and as
+   Bloomreach sees it (opens, clicks, views) — in one side panel.
+2. **Signals disagree — the agent notices.** Ava is `churn_risk` by recency yet clicked
+   the win-back email two days later. Discounting her burns margin; a personal nudge
+   converts her. The recommendation engine surfaces this; the agent articulates it.
+3. **Then it acts.** "Execute it" → discount created in Shopify, campaign triggered in
+   Bloomreach, receipts shown. That's the loop: intelligence → decision → activation.
+
+## 🎯 Track fit
+- **T5 (Behavioral signal and intervention agents):** core demo — behavior → intervention.
+- **T6 (Composable orchestration, all four):** the unified profile + chat actions ARE the
+  orchestration; deploy on Cloud Run and all four boxes of the diagram are live.
