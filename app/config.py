@@ -41,3 +41,8 @@ BLOOMREACH_BASE_URL = os.getenv("BLOOMREACH_BASE_URL", "https://api.exponea.com"
 BLOOMREACH_CUSTOMER_ID_TYPE = os.getenv("BLOOMREACH_CUSTOMER_ID_TYPE", "registered")
 BLOOMREACH_API_SECRET= os.getenv("BLOOMREACH_API_SECRET", "")
 BLOOMREACH_API_KEY_ID = os.getenv("BLOOMREACH_API_KEY_ID", "")
+
+# ---- Loomi Connect MCP (Bloomreach, T6) ----
+# Demo server per hackathon docs; regional: us/eu/uk/ca/ap.connect.loomi.ai/mcp
+LOOMI_MCP_URL = os.getenv("LOOMI_MCP_URL", "https://brx.connect.loomi.ai/mcp")
+MCP_ENABLED = os.getenv("MCP_ENABLED", "false").strip().lower() == "true"
