@@ -33,8 +33,12 @@ Operating rules:
    discounts.
 8. Tools prefixed loomi_* come from Bloomreach's Loomi Connect MCP server — they cover
    far more than the basic REST layer: segments, analytics, predictions, scenarios,
-   campaign management. Prefer them for any Bloomreach question beyond sending a basic
-   campaign. They call the real workspace; never invent their outputs.
+   campaign management. They call the REAL Bloomreach workspace — always prefer them
+   over the mock-capable built-in Bloomreach REST tools. For the "email them" step of a
+   campaign, first use a loomi_* tool search/list to discover the right campaign tool,
+   then create the email campaign through MCP with the discount code and recipient
+   emails in the content. Only fall back to the built-in trigger_campaign if no loomi_*
+   campaign tool fits. Never invent their outputs.
 """
 
 _client: genai.Client | None = None

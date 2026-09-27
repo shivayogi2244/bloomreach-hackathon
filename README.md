@@ -54,15 +54,17 @@ so the full loop works today. Flip each one to live as you get credentials.
 
 ## 🟢 Demo configuration (as submitted)
 
-Three of the four platforms run **live** in the demo; receipts in the UI show the
-mode of every call (`databricks[live]`, `shopify[live]`, `bloomreach[mock]`, `loomi_*`):
+Three of the four integration surfaces run **live** in the demo — and all four *platforms*
+are live, because Bloomreach is reached through the Loomi Connect MCP server. Receipts in
+the UI show the mode of every call (`databricks[live]`, `shopify[live]`,
+`loomi_*`, and the mock REST fallback only if MCP campaign creation doesn't fit):
 
 | Platform | Mode | Proof in demo |
 |---|---|---|
 | Databricks | **live** | SQL over `workspace.default.loop_segments` — real segments (VIP / churn_risk) |
 | Shopify | **live** | Real orders + catalog from the dev store; `create_discount` makes a real code visible in Admin → Discounts |
-| Loomi Connect MCP | **live** | Agent chains `loomi_list_cloud_organizations` → `loomi_list_projects` → `loomi_search_email_campaigns` against real Bloomreach projects |
-| Bloomreach REST | mock | `trigger_campaign` fires locally; the live Bloomreach story is carried by MCP |
+| Bloomreach | **live (via Loomi MCP)** | Agent chains `loomi_list_cloud_organizations` → `loomi_list_projects` → `loomi_search_email_campaigns` against real Bloomreach projects, and creates the win-back email campaign through MCP tools |
+| Bloomreach REST fallback | mock | Legacy hand-written `trigger_campaign` used only if no MCP campaign tool fits; MCP is the live path |
 
 Run `python tests/live_check.py` (credential doctor) and `python -m tests.mcp_check`
 (SSO + tool probe) to reproduce.
@@ -100,8 +102,9 @@ Run `python tests/live_check.py` (credential doctor) and `python -m tests.mcp_ch
 1. In Engagement → **Campaigns**, create an email campaign with a *trigger* node.
 2. Copy the campaign ID; create an **API token** (Settings → Access management).
 3. Env: `BLOOMREACH_PROJECT_ID`, `BLOOMREACH_API_KEY_ID`, `BLOOMREACH_API_SECRET`,
-   `BLOOMREACH_CAMPAIGN_ID`. Keep `BLOOMREACH_MOCK=true` unless the project ID + API
-   pair are real — the MCP beats carry the live Bloomreach story.
+   `BLOOMREACH_CAMPAIGN_ID`. The REST layer may stay on mock — the agent prefers the
+   live Loomi MCP tools for all Bloomreach work (see rule 8 in `app/agent.py`), so the
+   platform runs live regardless.
 
 Then set `USE_MOCKS=false` (or per-service: `SHOPIFY_MOCK=false`, etc.).
 
@@ -157,9 +160,9 @@ Bloomreach's full MCP surface — campaigns, segments, analytics, predictions, s
 4. Restart the server. The agent now sees `loomi_*` tools alongside the built-ins and
    can mix them freely (e.g. Databricks segment → MCP analytics → MCP campaign draft).
 
-Notes: MCP campaign sends are always **drafts** (by design); the REST `trigger_campaign`
-remains the live-send path. Auth uses browser SSO, so run the check once on the demo
-machine beforehand.
+Notes: MCP is the **live** Bloomreach path; auth uses browser SSO (token cache ~30
+days), so run the check once on the demo machine beforehand. The REST `trigger_campaign`
+remains only as a mock fallback.
 
 ## 🧭 The judge-facing story
 
