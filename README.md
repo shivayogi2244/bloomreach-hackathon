@@ -3,7 +3,7 @@
 > **Track T6 — Composable commerce orchestration:** close the full loop. All four
 > platforms. One agent. Gemini orchestrates; Databricks supplies intelligence; Shopify
 > supplies commerce actions; **Bloomreach connects through the Loomi Connect MCP server**
-> (`brx.connect.loomi.ai/mcp`, 160+ tools) with your existing REST fallback; Google Cloud
+> (`brx.connect.loomi.ai/mcp`, 109 tools, OAuth SSO) with your existing REST fallback; Google Cloud
 > Run is the deployment surface.
 
 > **The thesis, answered:** four platforms generate signals about the same customer from
@@ -52,6 +52,21 @@ uvicorn app.main:app --reload
 Databricks / Shopify / Bloomreach all default to **mock mode** (`USE_MOCKS=true` in `.env`),
 so the full loop works today. Flip each one to live as you get credentials.
 
+## 🟢 Demo configuration (as submitted)
+
+Three of the four platforms run **live** in the demo; receipts in the UI show the
+mode of every call (`databricks[live]`, `shopify[live]`, `bloomreach[mock]`, `loomi_*`):
+
+| Platform | Mode | Proof in demo |
+|---|---|---|
+| Databricks | **live** | SQL over `workspace.default.loop_segments` — real segments (VIP / churn_risk) |
+| Shopify | **live** | Real orders + catalog from the dev store; `create_discount` makes a real code visible in Admin → Discounts |
+| Loomi Connect MCP | **live** | Agent chains `loomi_list_cloud_organizations` → `loomi_list_projects` → `loomi_search_email_campaigns` against real Bloomreach projects |
+| Bloomreach REST | mock | `trigger_campaign` fires locally; the live Bloomreach story is carried by MCP |
+
+Run `python tests/live_check.py` (credential doctor) and `python -m tests.mcp_check`
+(SSO + tool probe) to reproduce.
+
 ---
 
 ## 🔌 Going live, platform by platform
@@ -62,22 +77,31 @@ so the full loop works today. Flip each one to live as you get credentials.
 - Deploy: `gcloud run deploy --source .` (Dockerfile included, region `us-central1`)
 
 ### 2. Databricks (intelligence)
-1. Create a **SQL Warehouse** (Serverless works) → note its **Warehouse ID**.
+1. Create a **SQL Warehouse** (Serverless works).
 2. Settings → **Access tokens** → generate a PAT.
 3. Run `sql/setup.sql` in a notebook / SQL editor to create + seed tables.
-4. Env: `DATABRICKS_HOST`, `DATABRICKS_TOKEN`, `DATABRICKS_WAREHOUSE_ID`.
+4. Env: `DATABRICKS_HOST`, `DATABRICKS_TOKEN`, `DATABRICKS_HTTP_PATH`
+   (SQL Warehouses → your warehouse → Connection details → HTTP path), and
+   `DATABRICKS_TABLE=workspace.default.loop_segments`. All queries are guarded to
+   SELECT/WITH only.
 
 ### 3. Shopify (commerce)
-1. Shopify Admin → **Settings → Apps → Develop apps** → create app.
+1. Shopify Admin (the **store** admin, not the partner dashboard) → **Settings → Apps and sales channels → Develop apps** → create an app.
 2. Scopes needed: `read_orders, read_products, write_discounts`.
-3. Install → copy the **Admin API access token** (shown once).
-4. Env: `SHOPIFY_SHOP` (yourshop.myshopify.com), `SHOPIFY_TOKEN`.
+3. Install → copy the **Admin API access token** (`shpat_...`, shown once — the
+   `shpss_` secret from partner-dashboard apps is NOT this token).
+4. Seed for the demo: 2–3 products, a few test orders (Orders → Create order →
+   Mark as paid), emails matching the seeded customers.
+5. Env: `SHOPIFY_SHOP` (e.g. `loop-xxxx.myshopify.com`), `SHOPIFY_TOKEN`.
+   Discounts use the current `discountCodeBasicCreate` mutation with required
+   `context` (verified on API 2026-07).
 
 ### 4. Bloomreach (activation)
 1. In Engagement → **Campaigns**, create an email campaign with a *trigger* node.
 2. Copy the campaign ID; create an **API token** (Settings → Access management).
-3. Env: `BLOOMREACH_PROJECT_ID`, `BLOOMREACH_API_KEY`, `BLOOMREACH_CAMPAIGN_ID`.
-   (Endpoint shape in `app/bloomreach_tool.py` — verify against your project's Campaign API doc.)
+3. Env: `BLOOMREACH_PROJECT_ID`, `BLOOMREACH_API_KEY_ID`, `BLOOMREACH_API_SECRET`,
+   `BLOOMREACH_CAMPAIGN_ID`. Keep `BLOOMREACH_MOCK=true` unless the project ID + API
+   pair are real — the MCP beats carry the live Bloomreach story.
 
 Then set `USE_MOCKS=false` (or per-service: `SHOPIFY_MOCK=false`, etc.).
 
@@ -93,10 +117,14 @@ Then set `USE_MOCKS=false` (or per-service: `SHOPIFY_MOCK=false`, etc.).
 | 15:00–17:00 | Bloomreach campaign + trigger | email arrives in inbox |
 | 17:00–18:00 | Deploy to Cloud Run, record demo | public URL + 2-min Loom |
 
-## 🎬 2-minute demo script
-1. *"Show me VIP customers."* → Databricks rows appear.
-2. *"Create a 15% discount for anyone churn-risk and email them."* → agent: query → discount → campaign.
-3. Show the email in your inbox + the discount code working in Shopify.
+## 🎬 Demo beats (see `submission/video_script.md` for the full 4:30 script)
+1. *"Show me my VIP customers."* → `databricks[live]` rows appear.
+2. *"Win back churn-risk customers with a 15% discount and email them."* →
+   receipts: `query_customers databricks[live]` → `create_discount shopify[live]`
+   (real code in Shopify Admin → Discounts) → `trigger_campaign`.
+3. Loomi MCP beat: the agent autonomously explores the live MCP server
+   (`loomi_list_cloud_organizations` → `loomi_list_projects` →
+   `loomi_search_email_campaigns`) and returns real Bloomreach campaigns.
 4. *"What did you just do?"* → the agent summarizes the loop with tool receipts.
 
 ## 🧱 Repo map
@@ -109,7 +137,8 @@ app/
   shopify_tool.py    orders / products / discounts   (mock + live)
   databricks_tool.py SQL over segments               (mock + live)
   bloomreach_tool.py campaign trigger + engagement   (mock + live)
-  mcp_bridge.py      Loomi Connect MCP: 160+ Bloomreach tools (T6)
+  mcp_bridge.py      Loomi Connect MCP: 109 Bloomreach tools, OAuth SSO (T6)
+  mcp_oauth.py       Browser SSO for Loomi MCP (token cache ~30 days)
   config.py, state.py, mock_data.py, mock_signals.py
 sql/setup.sql        Databricks tables + seed data
 Dockerfile           Cloud Run deploy
