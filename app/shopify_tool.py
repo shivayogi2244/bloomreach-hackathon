@@ -171,9 +171,9 @@ def create_discount(percent: int, segment: str, customer_emails: list[str]) -> d
     code = f"LOOP{segment.upper()}{int(time.time()) % 10000}"
     starts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     q = """
-    mutation discount($basicCodeDiscount: DiscountBasicCodeInput!) {
-      discountBasicCodeCreate(basicCodeDiscount: $basicCodeDiscount) {
-        codeDiscountNode { id codeDiscount { codes(first: 1) { nodes { code } } } }
+    mutation discount($basicCodeDiscount: DiscountCodeBasicInput!) {
+      discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {
+        codeDiscountNode { id }
         userErrors { field message }
       }
     }"""
@@ -186,14 +186,12 @@ def create_discount(percent: int, segment: str, customer_emails: list[str]) -> d
                 "value": {"percentage": percent / 100.0},
                 "items": {"all": True},
             },
-            "customerSelection": {
-                "customers": {"first": 100}
-            },
+            "context": {"all": "ALL"},
             "appliesOncePerCustomer": True,
         }
     }
     data = _gql(q, variable_values)
-    errs = data["discountBasicCodeCreate"].get("userErrors")
+    errs = data["discountCodeBasicCreate"].get("userErrors")
     if errs:
         raise RuntimeError(f"Shopify discount error: {errs}")
     info = {
@@ -202,7 +200,7 @@ def create_discount(percent: int, segment: str, customer_emails: list[str]) -> d
         "segment": segment,
         "audience": customer_emails,
         "created_at": starts,
-        "note": "created for first 100 customers — refine customerSelection for large audiences",
+        "note": "discount applies to all customers — code shown at checkout",
     }
     state.DISCOUNTS[code] = info
     return {"mode": "live", **info}
